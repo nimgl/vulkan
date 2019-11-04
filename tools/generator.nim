@@ -1,17 +1,26 @@
 # Written by Leonardo Mariscal <leo@ldmd.mx>, 2019
 
-import strutils, ./utils, httpClient, os, xmlparser, xmltree, streams, strformat
+import strutils, ./utils, httpClient, os, xmlparser, xmltree, streams, strformat, math, tables, algorithm
 
 proc translateType(s: string): string =
   result = s
-  result = result.replace("uint32_t", "uint32")
-  result = result.replace("uint64_t", "uint64")
+  result = result.replace("int64_t", "int64")
+  result = result.replace("int32_t", "int32")
+  result = result.replace("int16_t", "int16")
+  result = result.replace("int8_t", "int8")
+  result = result.replace("size_t", "uint") # uint matches pointer size just like size_t
+  result = result.replace("void", "pointer")
+  result = result.replace("double", "float64")
+  result = result.replace("VK_DEFINE_HANDLE", "VkHandle")
+  result = result.replace("VK_DEFINE_NON_DISPATCHABLE_HANDLE", "VkNonDispatchableHandle")
+  result = result.replace("const ", "")
+  result = result.replace("unsigned ", "u")
+  result = result.replace("signed ", "")
 
 proc genTypes(node: XmlNode, output: var string) =
   echo "Generating Types..."
   output.add("# Types\n")
 
-  var count = 0
   var inType = false
 
   for types in node.findAll("types"):
@@ -43,6 +52,8 @@ proc genTypes(node: XmlNode, output: var string) =
           output.add("\nconst vkApiVersion1_0* = vkMakeVersion(1, 0, 0)\n")
         elif name == "VK_API_VERSION_1_1":
           output.add("const vkApiVersion1_1* = vkMakeVersion(1, 1, 0)\n")
+        else:
+          echo "category:define not found {name}".fmt
         continue
 
       # Basetype category
@@ -61,10 +72,6 @@ proc genTypes(node: XmlNode, output: var string) =
       # Bitmask category
 
       if t.attr("category") == "bitmask":
-        if not inType:
-          output.add("\ntype\n")
-          inType = true
-
         var name = t.attr("name")
         if t.child("name") != nil:
           name = t.child("name").innerText
@@ -83,12 +90,199 @@ proc genTypes(node: XmlNode, output: var string) =
 
       # Handle category
 
-      count.inc
-      if count > 10:
+      if t.attr("category") == "handle":
+        var name = t.attr("name")
+        if t.child("name") != nil:
+          name = t.child("name").innerText
+
+        var bType = t.attr("alias")
+        var alias = true
+        if t.child("type") != nil:
+          alias = false
+          bType = t.child("type").innerText
+        bType = bType.translateType()
+        if not alias:
+          bType = "distinct " & bType
+
+
+        output.add("  {name}* = {bType}\n".fmt)
         continue
-      echo t
 
+      # Enum category
 
+      if t.attr("category") == "enum":
+        # Implemented below
+        continue
+
+      # Funcpointer category
+
+      if t.attr("category") == "funcpointer":
+        let name = t.child("name").innerText
+        if name == "PFN_vkInternalAllocationNotification":
+          output.add("  PFN_vkInternalAllocationNotification* = proc(pUserData: pointer; size: csize; allocationType: VkInternalAllocationType; allocationScope: VkSystemAllocationScope) {.cdecl.}\n")
+        elif name == "PFN_vkInternalFreeNotification":
+          output.add("  PFN_vkInternalFreeNotification* = proc(pUserData: pointer; size: csize; allocationType: VkInternalAllocationType; allocationScope: VkSystemAllocationScope) {.cdecl.}\n")
+        elif name == "PFN_vkReallocationFunction":
+          output.add("  PFN_vkReallocationFunction* = proc(pUserData: pointer; pOriginal: pointer; size: csize; alignment: csize; allocationScope: VkSystemAllocationScope): pointer {.cdecl.}\n")
+        elif name == "PFN_vkAllocationFunction":
+          output.add("  PFN_vkAllocationFunction* = proc(pUserData: pointer; size: csize; alignment: csize; allocationScope: VkSystemAllocationScope): pointer {.cdecl.}\n")
+        elif name == "PFN_vkFreeFunction":
+          output.add("  PFN_vkFreeFunction* = proc(pUserData: pointer; pMemory: pointer) {.cdecl.}\n")
+        elif name == "PFN_vkVoidFunction":
+          output.add("  PFN_vkVoidFunction* = proc() {.cdecl.}\n")
+        elif name == "PFN_vkDebugReportCallbackEXT":
+          output.add("  PFN_vkDebugReportCallbackEXT* = proc(flags: VkDebugReportFlagsEXT; objectType: VkDebugReportObjectTypeEXT; cbObject: uint64; location: csize; messageCode:  int32; pLayerPrefix: cstring; pMessage: cstring; pUserData: pointer): VkBool32 {.cdecl.}\n")
+        elif name == "PFN_vkDebugUtilsMessengerCallbackEXT":
+          output.add("  PFN_vkDebugUtilsMessengerCallbackEXT* = proc(messageSeverity: VkDebugUtilsMessageSeverityFlagBitsEXT, messageTypes: VkDebugUtilsMessageTypeFlagsEXT, pCallbackData: VkDebugUtilsMessengerCallbackDataEXT, userData: pointer): VkBool32 {.cdecl.}\n"):
+        else:
+          echo "category:funcpointer not found {name}".fmt
+        continue
+
+      # Struct category
+
+      if t.attr("category") == "struct":
+        let name = t.attr("name")
+        if name == "VkBaseOutStructure" or name == "VkBaseInStructure":
+          continue
+
+        output.add("\n  {name}* = object\n".fmt)
+
+        for member in t.findAll("member"):
+          var memberName = member.child("name").innerText
+          if keywords.contains(memberName):
+            memberName = "`{memberName}`".fmt
+          var memberType = member.child("type").innerText
+          memberType = memberType.translateType()
+
+          var isArray = false
+          var arraySize = "0"
+          if member.innerText.contains('['):
+            arraySize = member.innerText[member.innerText.find('[') + 1 ..< member.innerText.find(']')]
+            if arraySize != "":
+              isArray = true
+            if arraySize == "_DYNAMIC":
+              memberType = "ptr " & memberType
+              isArray = false
+
+          var depth = member.innerText.count('*')
+          if memberType == "pointer":
+            depth.dec
+          for i in 0 ..< depth:
+            memberType = "ptr " & memberType
+
+          memberType = memberType.replace("ptr ptr char", "cstringArray")
+          memberType = memberType.replace("ptr char", "cstring")
+
+          if not isArray:
+            output.add("    {memberName}*: {memberType}\n".fmt)
+          else:
+            output.add("    {memberName}*: array[{arraySize}, {memberType}]\n".fmt)
+        continue
+
+      # Union category
+
+      if t.attr("category") == "union":
+        let name = t.attr("name")
+        if name == "VkBaseOutStructure" or name == "VkBaseInStructure":
+          continue
+
+        output.add("\n  {name}* {{.union.}} = object\n".fmt)
+
+        for member in t.findAll("member"):
+          var memberName = member.child("name").innerText
+          if keywords.contains(memberName):
+            memberName = "`{memberName}`".fmt
+          var memberType = member.child("type").innerText
+          memberType = memberType.translateType()
+
+          var isArray = false
+          var arraySize = "0"
+          if member.innerText.contains('['):
+            arraySize = member.innerText[member.innerText.find('[') + 1 ..< member.innerText.find(']')]
+            if arraySize != "":
+              isArray = true
+            if arraySize == "_DYNAMIC":
+              memberType = "ptr " & memberType
+              isArray = false
+
+          var depth = member.innerText.count('*')
+          if memberType == "pointer":
+            depth.dec
+          for i in 0 ..< depth:
+            memberType = "ptr " & memberType
+
+          if not isArray:
+            output.add("    {memberName}*: {memberType}\n".fmt)
+          else:
+            output.add("    {memberName}*: array[{arraySize}, {memberType}]\n".fmt)
+        continue
+
+proc genEnums(node: XmlNode, output: var string) =
+  echo "Generating and Adding Enums"
+  output.add("# Enums\n")
+
+  var inType = false
+  var count = 0
+
+  for enums in node.findAll("enums"):
+    let name = enums.attr("name")
+
+    if name == "API Constants":
+      inType = false
+      output.add("const\n")
+      for e in enums.items:
+        let enumName = e.attr("name")
+        var enumValue = e.attr("value")
+        enumValue = enumValue.replace("(~0U)", "(not 0)")
+        enumValue = enumValue.replace("(~0U-1)", "(not 0 - 1)")
+        enumValue = enumValue.replace("(~0U-2)", "(not 0 - 2)")
+        enumValue = enumValue.replace("(~0ULL)", "(not 0)")
+
+        if enumName == "VK_LUID_SIZE_KHR":
+          enumValue = "VK_LUID_SIZE"
+        elif enumName == "VK_QUEUE_FAMILY_EXTERNAL_KHR":
+          enumValue = "VK_QUEUE_FAMILY_EXTERNAL"
+        elif enumName == "VK_MAX_DEVICE_GROUP_SIZE_KHR":
+          enumValue = "VK_MAX_DEVICE_GROUP_SIZE"
+
+        output.add("  {enumName}* = {enumValue}\n".fmt)
+      continue
+
+    if not inType:
+      output.add("\ntype\n")
+      inType = true
+
+    var elements: OrderedTableRef[int, string] = newOrderedTable[int, string]()
+    for e in enums.items:
+      if e.tag != "enum":
+        continue
+
+      let enumName = e.attr("name")
+      var enumValueStr = e.attr("value")
+      if enumValueStr == "":
+        if e.attr("bitpos") == "":
+          continue
+        let bitpos = e.attr("bitpos").parseInt()
+        enumValueStr = $nextPowerOfTwo(bitpos)
+      enumValueStr = enumValueStr.translateType()
+
+      var enumValue = 0
+      if enumValueStr.contains('x'):
+        enumValue = fromHex[int](enumValueStr)
+      else:
+        enumValue = enumValueStr.parseInt()
+
+      if elements.hasKey(enumValue):
+        continue
+      elements.add(enumValue, enumName)
+
+    if elements.len == 0:
+      continue
+
+    output.add("  {name}* = enum\n".fmt)
+    elements.sort(system.cmp)
+    for k, v in elements.pairs:
+      output.add("    {v} = {k}\n".fmt)
 
 proc main() =
   if not os.fileExists("vk.xml"):
@@ -101,6 +295,7 @@ proc main() =
   let file = newFileStream("vk.xml", fmRead)
   let xml = file.parseXml()
 
+  xml.genEnums(output)
   xml.genTypes(output)
 
   writeFile("src/vulkan.nim", output)
