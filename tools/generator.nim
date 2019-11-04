@@ -16,6 +16,7 @@ type
 
 var vkProcs: seq[VkProc]
 var vkStructs: seq[VkStruct]
+var vkStructureTypes: seq[string]
 
 proc translateType(s: string): string =
   result = s
@@ -327,6 +328,8 @@ proc genEnums(node: XmlNode, output: var string) =
     output.add("  {name}* = enum\n".fmt)
     elements.sort(system.cmp)
     for k, v in elements.pairs:
+      if name == "VkStructureType":
+        vkStructureTypes.add(v.replace("_", ""))
       output.add("    {v} = {k}\n".fmt)
 
 proc genProcs(node: XmlNode, output: var string) =
@@ -434,8 +437,14 @@ proc genConstructors(node: XmlNode, output: var string) =
       if not output.endsWith('('):
         output.add(", ")
       output.add("{m.name}: {m.argType}".fmt)
+
+      if m.name == "sType":
+        for structType in vkStructureTypes:
+          if structType.cmpIgnoreStyle("VkStructureType{s.name[2..<s.name.len]}".fmt) == 0:
+            output.add(" = VkStructureType{s.name[2..<s.name.len]}".fmt)
       if m.argType == "pointer":
         output.add(" = nil")
+
     output.add("): {s.name} =\n".fmt)
 
     for m in s.members:
