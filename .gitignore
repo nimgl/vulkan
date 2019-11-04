@@ -165,3 +165,4 @@ docs/
 # End of https://www.gitignore.io/api/c,osx,nim,c++,linux,macos,windows,visualstudiocode
 
 vk.xml
+vk_layer_settings.txt
