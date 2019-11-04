@@ -10,8 +10,12 @@ type
   VkArg = object
     name: string
     argType: string
+  VkStruct = object
+    name: string
+    members: seq[VkArg]
 
 var vkProcs: seq[VkProc]
+var vkStructs: seq[VkStruct]
 
 proc translateType(s: string): string =
   result = s
@@ -176,6 +180,9 @@ proc genTypes(node: XmlNode, output: var string) =
         if name == "VkBaseOutStructure" or name == "VkBaseInStructure":
           continue
 
+        var vkStruct: VkStruct
+        vkStruct.name = name
+
         output.add("\n  {name}* = object\n".fmt)
 
         for member in t.findAll("member"):
@@ -205,10 +212,19 @@ proc genTypes(node: XmlNode, output: var string) =
           memberType = memberType.replace("ptr ptr char", "cstringArray")
           memberType = memberType.replace("ptr char", "cstring")
 
+          var vkArg: VkArg
+          vkArg.name = memberName
+          if not isArray:
+            vkArg.argType = memberType
+          else:
+            vkArg.argType = "array[{arraySize}, {memberType}]".fmt
+          vkStruct.members.add(vkArg)
+
           if not isArray:
             output.add("    {memberName}*: {memberType}\n".fmt)
           else:
             output.add("    {memberName}*: array[{arraySize}, {memberType}]\n".fmt)
+        vkStructs.add(vkStruct)
         continue
 
       # Union category
@@ -371,7 +387,6 @@ proc genFeatures(node: XmlNode, output: var string) =
 
     for command in feature.findAll("command"):
       let name = command.attr("name")
-      var found = false
       for vkProc in vkProcs:
         if name == vkProc.name:
           output.add("  {name} = cast[proc(".fmt)
@@ -408,6 +423,22 @@ proc genExtensions(node: XmlNode, output: var string) =
           output.add("{arg.name}: {arg.argType}".fmt)
         output.add("): {vkProc.rVal} {{.stdcall.}}](vkGetProc(\"{vkProc.name}\"))\n".fmt)
 
+proc genConstructors(node: XmlNode, output: var string) =
+  echo "Generating and Adding Constructors..."
+  output.add("\n# Constructors\n")
+  for s in vkStructs:
+    if s.members.len == 0:
+      continue
+    output.add("\nproc new{s.name}*(".fmt)
+    for m in s.members:
+      if not output.endsWith('('):
+        output.add(", ")
+      output.add("{m.name}: {m.argType}".fmt)
+    output.add("): {s.name} =\n".fmt)
+
+    for m in s.members:
+      output.add("  result.{m.name} = {m.name}\n".fmt)
+
 proc main() =
   if not os.fileExists("vk.xml"):
     let client = newHttpClient()
@@ -421,6 +452,7 @@ proc main() =
 
   xml.genEnums(output)
   xml.genTypes(output)
+  xml.genConstructors(output)
   xml.genProcs(output)
   xml.genFeatures(output)
   xml.genExtensions(output)
