@@ -26,6 +26,11 @@ proc main() =
   if not vkInit():
     echo "Failed to load Vulkan"
 
+  var extensionCount: uint32
+  discard vkEnumerateInstanceExtensionProperties(nil, extensionCount.addr, nil)
+
+  echo $extensionCount & " extensions supported"
+
   while not w.windowShouldClose:
     glfwPollEvents()
     w.swapBuffers()

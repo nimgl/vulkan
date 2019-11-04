@@ -2,6 +2,17 @@
 
 import strutils, ./utils, httpClient, os, xmlparser, xmltree, streams, strformat, math, tables, algorithm
 
+type
+  VkProc = object
+    name: string
+    rVal: string
+    args: seq[VkArg]
+  VkArg = object
+    name: string
+    argType: string
+
+var vkProcs: seq[VkProc]
+
 proc translateType(s: string): string =
   result = s
   result = result.replace("int64_t", "int64")
@@ -9,25 +20,45 @@ proc translateType(s: string): string =
   result = result.replace("int16_t", "int16")
   result = result.replace("int8_t", "int8")
   result = result.replace("size_t", "uint") # uint matches pointer size just like size_t
-  result = result.replace("void", "pointer")
   result = result.replace("double", "float64")
   result = result.replace("VK_DEFINE_HANDLE", "VkHandle")
   result = result.replace("VK_DEFINE_NON_DISPATCHABLE_HANDLE", "VkNonDispatchableHandle")
   result = result.replace("const ", "")
+  result = result.replace(" const", "")
   result = result.replace("unsigned ", "u")
   result = result.replace("signed ", "")
+  result = result.replace("floatble", "float")
+  result = result.replace("struct ", "")
+
+  if result.contains('*'):
+    let levels = result.count('*')
+    result = result.replace("*", "")
+    for i in 0..<levels:
+      result = "ptr " & result
+
+  result = result.replace("ptr void", "pointer")
+  result = result.replace("ptr ptr char", "cstringArray")
+  result = result.replace("ptr char", "cstring")
 
 proc genTypes(node: XmlNode, output: var string) =
   echo "Generating Types..."
-  output.add("# Types\n")
+  output.add("\n# Types\n")
 
   var inType = false
 
   for types in node.findAll("types"):
     for t in types.items:
-      if t.attr("category") == "include" or t.attr("requires").contains(".h") or
-         t.attr("requires") == "vk_platform" or t.tag != "type" or t.attr("name") == "int":
+      if t.attr("category") == "include" or t.attr("requires") == "vk_platform" or
+         t.tag != "type" or t.attr("name") == "int":
         continue
+
+      # Require Header
+      if t.attr("requires").contains(".h"):
+        if not inType:
+          output.add("\ntype\n")
+          inType = true
+
+        output.add("  {t.attr(\"name\")}* = ptr object\n".fmt)
 
       # Define category
 
@@ -170,6 +201,7 @@ proc genTypes(node: XmlNode, output: var string) =
           for i in 0 ..< depth:
             memberType = "ptr " & memberType
 
+          memberType = memberType.replace("ptr void", "pointer")
           memberType = memberType.replace("ptr ptr char", "cstringArray")
           memberType = memberType.replace("ptr char", "cstring")
 
@@ -220,10 +252,7 @@ proc genTypes(node: XmlNode, output: var string) =
 proc genEnums(node: XmlNode, output: var string) =
   echo "Generating and Adding Enums"
   output.add("# Enums\n")
-
   var inType = false
-  var count = 0
-
   for enums in node.findAll("enums"):
     let name = enums.attr("name")
 
@@ -284,6 +313,74 @@ proc genEnums(node: XmlNode, output: var string) =
     for k, v in elements.pairs:
       output.add("    {v} = {k}\n".fmt)
 
+proc genProcs(node: XmlNode, output: var string) =
+  echo "Generating Procedures..."
+  output.add("\n# Procs\n")
+  output.add("var\n")
+  for commands in node.findAll("commands"):
+    for command in commands.findAll("command"):
+      var vkProc: VkProc
+      if command.child("proto") == nil:
+        continue
+      vkProc.name = command.child("proto").child("name").innerText
+      vkProc.rVal = command.child("proto").innerText
+      vkProc.rVal = vkProc.rVal[0 ..< vkProc.rval.len - vkProc.name.len]
+      while vkProc.rVal.endsWith(" "):
+        vkProc.rVal = vkProc.rVal[0 ..< vkProc.rVal.len - 1]
+      vkProc.rVal = vkProc.rVal.translateType()
+
+      if vkProc.name == "vkGetTransformFeedbacki_v":
+        continue
+
+      for param in command.findAll("param"):
+        var vkArg: VkArg
+        if param.child("name") == nil:
+          continue
+        vkArg.name = param.child("name").innerText
+        vkArg.argType = param.innerText
+        vkArg.argType = vkArg.argType[0 ..< vkArg.argType.len - vkArg.name.len]
+        while vkArg.argType.endsWith(" "):
+          vkArg.argType = vkArg.argType[0 ..< vkArg.argType.len - 1]
+
+        for part in vkArg.name.split(" "):
+          if keywords.contains(part):
+            vkArg.name = "`{vkArg.name}`".fmt
+
+        vkArg.argType = vkArg.argType.translateType()
+
+        if param.innerText.contains('['):
+          let arraySize = param.innerText[param.innerText.find('[') + 1 ..< param.innerText.find(']')]
+          vkArg.argType = "array[{arraySize}, {vkArg.argType}]".fmt
+
+        vkProc.args.add(vkArg)
+
+      vkProcs.add(vkProc)
+      output.add("  {vkProc.name}*: proc(".fmt)
+      for arg in vkProc.args:
+        if not output.endsWith('('):
+          output.add(", ")
+        output.add("{arg.name}: {arg.argType}".fmt)
+      output.add("): {vkProc.rval} {{.stdcall.}}\n".fmt)
+
+proc genFeatures(node: XmlNode, output: var string) =
+  echo "Generating Features..."
+  for feature in node.findAll("feature"):
+    let number = feature.attr("number").replace(".", "_")
+    output.add("\n# Vulkan {number}\n".fmt)
+    output.add("proc vkLoad{number}*() =\n".fmt)
+
+    for command in feature.findAll("command"):
+      let name = command.attr("name")
+      var found = false
+      for vkProc in vkProcs:
+        if name == vkProc.name:
+          output.add("  {name} = cast[proc(".fmt)
+          for arg in vkProc.args:
+            if not output.endsWith("("):
+              output.add(", ")
+            output.add("{arg.name}: {arg.argType}".fmt)
+          output.add("): {vkProc.rVal} {{.stdcall.}}](vkGetProc(\"{vkProc.name}\"))\n".fmt)
+
 proc main() =
   if not os.fileExists("vk.xml"):
     let client = newHttpClient()
@@ -297,6 +394,10 @@ proc main() =
 
   xml.genEnums(output)
   xml.genTypes(output)
+  xml.genProcs(output)
+  xml.genFeatures(output)
+
+  output.add("\n" & vkInit)
 
   writeFile("src/vulkan.nim", output)
 

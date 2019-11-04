@@ -45,24 +45,17 @@ type
   VkHandle* = int64
   VkNonDispatchableHandle* = int64
   ANativeWindow = ptr object
-  wl_display = ptr object
-  wl_surface = ptr object
-  HWND = ptr object
-  Display = ptr object
-  Window = ptr object
-  HINSTANCE = ptr object
-  xcb_window_t = ptr object
-  xcb_connection_t = ptr object
-  zx_handle_t = ptr object
-  GgpStreamDescriptor = ptr object
-  HANDLE = ptr object
-  SECURITY_ATTRIBUTES = ptr object
-  DWORD = ptr object
-  LPCWSTR = ptr object
   CAMetalLayer = ptr object
   AHardwareBuffer = ptr object
-  GgpFrameToken = ptr object
-  HMONITOR = ptr object
+"""
+
+const vkInit* = """
+proc vkInit*(load1_0: bool = true, load1_1: bool = true): bool =
+  if load1_0:
+    vkLoad1_0()
+  if load1_1:
+    vkLoad1_1()
+  return true
 """
 
 let keywords* = ["addr", "and", "as", "asm", "bind", "block", "break", "case", "cast", "concept",
