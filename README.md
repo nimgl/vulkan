@@ -65,7 +65,20 @@ The PRs and new feature development will occur in each binding's repo.
 ```nim
 import vulkan
 
-# TODO
+# Create window (GLFW Recommended)
+
+if vkInit():
+  echo "Vulkan started successfully!"
+
+var extensionCount: uint32
+discard vkEnumerateInstanceExtensionProperties(nil, extensionCount.addr, nil)
+
+echo $extensionCount & " extensions supported"
+
+# You can load extensions
+loadVK_EXT_host_query_reset()
+if vkResetQueryPoolEXT == nil:
+  echo "Failed to load VK_EXT_host_query_reset extension"
 ```
 
 Check out the references and doc in order to understand Vulkan usage.
