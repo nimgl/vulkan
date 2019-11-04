@@ -8,8 +8,6 @@ const srcHeader* = """
 ## WARNING: This is a generated file. Do not edit
 ## Any edits will be overwritten by the generator.
 
-import strutils
-
 var vkGetProc: proc(procName: cstring): pointer {.cdecl.}
 
 when not defined(vkCustomLoader):

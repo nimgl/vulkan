@@ -363,7 +363,7 @@ proc genProcs(node: XmlNode, output: var string) =
       output.add("): {vkProc.rval} {{.stdcall.}}\n".fmt)
 
 proc genFeatures(node: XmlNode, output: var string) =
-  echo "Generating Features..."
+  echo "Generating and Adding Features..."
   for feature in node.findAll("feature"):
     let number = feature.attr("number").replace(".", "_")
     output.add("\n# Vulkan {number}\n".fmt)
@@ -381,6 +381,33 @@ proc genFeatures(node: XmlNode, output: var string) =
             output.add("{arg.name}: {arg.argType}".fmt)
           output.add("): {vkProc.rVal} {{.stdcall.}}](vkGetProc(\"{vkProc.name}\"))\n".fmt)
 
+proc genExtensions(node: XmlNode, output: var string) =
+  echo "Generating and Adding Extensions..."
+  for extensions in node.findAll("extensions"):
+    for extension in extensions.findAll("extension"):
+
+      var commands: seq[VkProc]
+      for require in extension.findAll("require"):
+        for command in require.findAll("command"):
+          for vkProc in vkProcs:
+            if vkProc.name == command.attr("name"):
+              commands.add(vkProc)
+
+      if commands.len == 0:
+        continue
+
+      let name = extension.attr("name")
+      output.add("\n# Load {name}\n".fmt)
+      output.add("proc load{name}*() =\n".fmt)
+
+      for vkProc in commands:
+        output.add("  {vkProc.name} = cast[proc(".fmt)
+        for arg in vkProc.args:
+          if not output.endsWith("("):
+            output.add(", ")
+          output.add("{arg.name}: {arg.argType}".fmt)
+        output.add("): {vkProc.rVal} {{.stdcall.}}](vkGetProc(\"{vkProc.name}\"))\n".fmt)
+
 proc main() =
   if not os.fileExists("vk.xml"):
     let client = newHttpClient()
@@ -396,6 +423,7 @@ proc main() =
   xml.genTypes(output)
   xml.genProcs(output)
   xml.genFeatures(output)
+  xml.genExtensions(output)
 
   output.add("\n" & vkInit)
 
