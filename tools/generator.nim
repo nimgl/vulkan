@@ -434,6 +434,8 @@ proc genConstructors(node: XmlNode, output: var string) =
       if not output.endsWith('('):
         output.add(", ")
       output.add("{m.name}: {m.argType}".fmt)
+      if m.argType == "pointer":
+        output.add(" = nil")
     output.add("): {s.name} =\n".fmt)
 
     for m in s.members:
