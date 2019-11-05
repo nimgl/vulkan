@@ -438,6 +438,8 @@ proc genConstructors(node: XmlNode, output: var string) =
         output.add(", ")
       output.add("{m.name}: {m.argType}".fmt)
 
+      if m.name.contains("flags"):
+        output.add(" = 0.{m.argType}".fmt)
       if m.name == "sType":
         for structType in vkStructureTypes:
           if structType.cmpIgnoreStyle("VkStructureType{s.name[2..<s.name.len]}".fmt) == 0:
