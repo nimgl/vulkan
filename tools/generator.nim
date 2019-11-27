@@ -325,7 +325,7 @@ proc genEnums(node: XmlNode, output: var string) =
     if elements.len == 0:
       continue
 
-    output.add("  {name}* = enum\n".fmt)
+    output.add("  {name}* {{.size: int32.sizeof.}} = enum\n".fmt)
     elements.sort(system.cmp)
     for k, v in elements.pairs:
       if name == "VkStructureType":
