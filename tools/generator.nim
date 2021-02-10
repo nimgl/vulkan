@@ -249,7 +249,6 @@ proc genTypes(node: XmlNode, output: var string) =
           if keywords.contains(memberName):
             memberName = "`{memberName}`".fmt
           var memberType = member.child("type").innerText
-          memberType = memberType.translateType()
 
           var isArray = false
           var arraySize = "0"
@@ -266,6 +265,8 @@ proc genTypes(node: XmlNode, output: var string) =
             depth.dec
           for i in 0 ..< depth:
             memberType = "ptr " & memberType
+
+          memberType = memberType.translateType()
 
           if not isArray:
             output.add("    {memberName}*: {memberType}\n".fmt)
