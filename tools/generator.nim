@@ -99,7 +99,7 @@ proc genTypes(node: XmlNode, output: var string) =
           output.add("\ntype\n")
           inType = true
         let name = t.child("name").innerText
-        var bType = t.child("type").innerText
+        var bType = t.innerText
         bType = bType.translateType()
 
         output.add("  {name}* = distinct {bType}\n".fmt)
@@ -300,7 +300,7 @@ proc genEnums(node: XmlNode, output: var string) =
 
     var elements: OrderedTableRef[int, string] = newOrderedTable[int, string]()
     for e in enums.items:
-      if e.tag != "enum":
+      if e.kind != xnElement or e.tag != "enum":
         continue
 
       let enumName = e.attr("name")
