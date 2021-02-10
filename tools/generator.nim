@@ -281,10 +281,15 @@ proc genEnums(node: XmlNode, output: var string) =
       for e in enums.items:
         let enumName = e.attr("name")
         var enumValue = e.attr("value")
-        enumValue = enumValue.replace("(~0U)", "(not 0)")
-        enumValue = enumValue.replace("(~0U-1)", "(not 0 - 1)")
-        enumValue = enumValue.replace("(~0U-2)", "(not 0 - 2)")
-        enumValue = enumValue.replace("(~0ULL)", "(not 0)")
+        if enumValue == "":
+          if e.attr("alias") == "":
+            continue
+          enumValue = e.attr("alias")
+        else:
+          enumValue = enumValue.replace("(~0U)", "(not 0'u32)")
+          enumValue = enumValue.replace("(~0U-1)", "(not 0'u32) - 1")
+          enumValue = enumValue.replace("(~0U-2)", "(not 0'u32) - 2")
+          enumValue = enumValue.replace("(~0ULL)", "(not 0'u64)")
 
         if enumName == "VK_LUID_SIZE_KHR":
           enumValue = "VK_LUID_SIZE"
