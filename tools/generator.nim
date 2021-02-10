@@ -1,6 +1,6 @@
 # Written by Leonardo Mariscal <leo@ldmd.mx>, 2019
 
-import strutils, ./utils, httpClient, os, xmlparser, xmltree, streams, strformat, math, tables, algorithm
+import strutils, ./utils, httpClient, os, xmlparser, xmltree, streams, strformat, math, tables, algorithm, bitops
 
 type
   VkProc = object
@@ -321,7 +321,9 @@ proc genEnums(node: XmlNode, output: var string) =
         if e.attr("bitpos") == "":
           continue
         let bitpos = e.attr("bitpos").parseInt()
-        enumValueStr = $nextPowerOfTwo(bitpos)
+        var num = 0
+        num.setBit(bitpos)
+        enumValueStr = $num
       enumValueStr = enumValueStr.translateType()
 
       var enumValue = 0
