@@ -25,6 +25,7 @@ proc translateType(s: string): string =
   result = result.replace("int16_t", "int16")
   result = result.replace("int8_t", "int8")
   result = result.replace("size_t", "uint") # uint matches pointer size just like size_t
+  result = result.replace("float", "float32")
   result = result.replace("double", "float64")
   result = result.replace("VK_DEFINE_HANDLE", "VkHandle")
   result = result.replace("VK_DEFINE_NON_DISPATCHABLE_HANDLE", "VkNonDispatchableHandle")
