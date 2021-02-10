@@ -1,41 +1,36 @@
-import vulkan, glfw
+import nimgl/glfw
+from nimgl/vulkan import nil
+from triangle import nil
 
-proc keyProc(window: GLFWWindow, key: int32, scancode: int32, action: int32, mods: int32): void {.cdecl.} =
-  if key == GLFWKey.Escape and action == GLFWPress:
+proc keyCallback(window: GLFWWindow, key: int32, scancode: int32, action: int32, mods: int32) {.cdecl.} =
+  if action == GLFW_PRESS and key == GLFWKey.Escape:
     window.setWindowShouldClose(true)
 
-proc main() =
-  assert glfwInit()
+if isMainModule:
+  doAssert glfwInit()
 
-  glfwWindowHint(GLFWResizable, GLFW_FALSE)
-  glfwWindowHint(GLFWClientAPI, GLFW_NO_API)
+  glfwWindowHint(GLFWClientApi, GLFWNoApi)
+  glfwWindowHint(GLFWResizable, GLFWFalse)
 
-  let w: GLFWWindow = glfwCreateWindow(800, 600)
+  var w = glfwCreateWindow(triangle.WIDTH, triangle.HEIGHT, "Vulkan Triangle")
   if w == nil:
     quit(-1)
 
-  discard w.setKeyCallback(keyProc)
-  w.makeContextCurrent()
+  discard w.setKeyCallback(keyCallback)
 
-  if not glfwVulkanSupported():
-    echo "Vulkan is NOT Supported!"
-    w.destroyWindow()
-    glfwTerminate()
-    return
+  proc createSurface(instance: vulkan.VkInstance): vulkan.VkSurfaceKHR =
+    if glfwCreateWindowSurface(instance, w, nil, result.addr) != vulkan.VKSuccess:
+      quit("failed to create surface")
 
-  if not vkInit():
-    echo "Failed to load Vulkan"
+  var glfwExtensionCount: uint32 = 0
+  var glfwExtensions: cstringArray
+  glfwExtensions = glfwGetRequiredInstanceExtensions(glfwExtensionCount.addr)
+  triangle.init(glfwExtensions, glfwExtensionCount, createSurface)
 
-  var extensionCount: uint32
-  discard vkEnumerateInstanceExtensionProperties(nil, extensionCount.addr, nil)
-
-  echo $extensionCount & " extensions supported"
-
-  while not w.windowShouldClose:
+  while not w.windowShouldClose():
     glfwPollEvents()
-    w.swapBuffers()
+    triangle.tick()
 
+  triangle.deinit()
   w.destroyWindow()
   glfwTerminate()
-
-main()
