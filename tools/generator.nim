@@ -33,7 +33,6 @@ proc translateType(s: string): string =
   result = result.replace(" const", "")
   result = result.replace("unsigned ", "u")
   result = result.replace("signed ", "")
-  result = result.replace("floatble", "float")
   result = result.replace("struct ", "")
 
   if result.contains('*'):
@@ -370,19 +369,20 @@ proc genProcs(node: XmlNode, output: var string) =
           continue
         vkArg.name = param.child("name").innerText
         vkArg.argType = param.innerText
-        vkArg.argType = vkArg.argType[0 ..< vkArg.argType.len - vkArg.name.len]
-        while vkArg.argType.endsWith(" "):
-          vkArg.argType = vkArg.argType[0 ..< vkArg.argType.len - 1]
+
+        if vkArg.argType.contains('['):
+          let openBracket = vkArg.argType.find('[')
+          let arraySize = vkArg.argType[openBracket + 1 ..< vkArg.argType.find(']')]
+          var typeName = vkArg.argType[0..<openBracket].translateType()
+          typeName = typeName[0 ..< typeName.len - vkArg.name.len]
+          vkArg.argType = "array[{arraySize}, {typeName}]".fmt
+        else:
+          vkArg.argType = vkArg.argType[0 ..< vkArg.argType.len - vkArg.name.len]
+          vkArg.argType = vkArg.argType.translateType()
 
         for part in vkArg.name.split(" "):
           if keywords.contains(part):
             vkArg.name = "`{vkArg.name}`".fmt
-
-        vkArg.argType = vkArg.argType.translateType()
-
-        if param.innerText.contains('['):
-          let arraySize = param.innerText[param.innerText.find('[') + 1 ..< param.innerText.find(']')]
-          vkArg.argType = "array[{arraySize}, {vkArg.argType}]".fmt
 
         vkProc.args.add(vkArg)
 
