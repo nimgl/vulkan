@@ -100,10 +100,11 @@ proc genTypes(node: XmlNode, output: var string) =
           output.add("\ntype\n")
           inType = true
         let name = t.child("name").innerText
-        var bType = t.innerText
-        bType = bType.translateType()
+        if t.child("type") != nil:
+          var bType = t.child("type").innerText
+          bType = bType.translateType()
 
-        output.add("  {name}* = distinct {bType}\n".fmt)
+          output.add("  {name}* = distinct {bType}\n".fmt)
         continue
 
       # Bitmask category
