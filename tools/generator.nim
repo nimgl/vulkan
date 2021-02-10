@@ -149,7 +149,12 @@ proc genTypes(node: XmlNode, output: var string) =
       # Enum category
 
       if t.attr("category") == "enum":
-        # Implemented below
+        let name = t.attr("name")
+        let alias = t.attr("alias")
+        # We are only outputting aliased enums here
+        # The real enums are implemented below
+        if alias != "":
+          output.add("  {name}* = {alias}\n".fmt)
         continue
 
       # Funcpointer category
