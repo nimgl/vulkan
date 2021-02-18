@@ -1,6 +1,6 @@
 # Written by Leonardo Mariscal <leo@ldmd.mx>, 2019
 
-import strutils, ./utils, httpClient, os, xmlparser, xmltree, streams, strformat, math, tables, algorithm
+import strutils, ./utils, httpClient, os, xmlparser, xmltree, streams, strformat, math, tables, algorithm, bitops
 
 type
   VkProc = object
@@ -25,6 +25,7 @@ proc translateType(s: string): string =
   result = result.replace("int16_t", "int16")
   result = result.replace("int8_t", "int8")
   result = result.replace("size_t", "uint") # uint matches pointer size just like size_t
+  result = result.replace("float", "float32")
   result = result.replace("double", "float64")
   result = result.replace("VK_DEFINE_HANDLE", "VkHandle")
   result = result.replace("VK_DEFINE_NON_DISPATCHABLE_HANDLE", "VkNonDispatchableHandle")
@@ -32,7 +33,6 @@ proc translateType(s: string): string =
   result = result.replace(" const", "")
   result = result.replace("unsigned ", "u")
   result = result.replace("signed ", "")
-  result = result.replace("floatble", "float")
   result = result.replace("struct ", "")
 
   if result.contains('*'):
@@ -99,10 +99,11 @@ proc genTypes(node: XmlNode, output: var string) =
           output.add("\ntype\n")
           inType = true
         let name = t.child("name").innerText
-        var bType = t.child("type").innerText
-        bType = bType.translateType()
+        if t.child("type") != nil:
+          var bType = t.child("type").innerText
+          bType = bType.translateType()
 
-        output.add("  {name}* = distinct {bType}\n".fmt)
+          output.add("  {name}* = distinct {bType}\n".fmt)
         continue
 
       # Bitmask category
@@ -147,7 +148,12 @@ proc genTypes(node: XmlNode, output: var string) =
       # Enum category
 
       if t.attr("category") == "enum":
-        # Implemented below
+        let name = t.attr("name")
+        let alias = t.attr("alias")
+        # We are only outputting aliased enums here
+        # The real enums are implemented below
+        if alias != "":
+          output.add("  {name}* = {alias}\n".fmt)
         continue
 
       # Funcpointer category
@@ -242,7 +248,6 @@ proc genTypes(node: XmlNode, output: var string) =
           if keywords.contains(memberName):
             memberName = "`{memberName}`".fmt
           var memberType = member.child("type").innerText
-          memberType = memberType.translateType()
 
           var isArray = false
           var arraySize = "0"
@@ -259,6 +264,8 @@ proc genTypes(node: XmlNode, output: var string) =
             depth.dec
           for i in 0 ..< depth:
             memberType = "ptr " & memberType
+
+          memberType = memberType.translateType()
 
           if not isArray:
             output.add("    {memberName}*: {memberType}\n".fmt)
@@ -279,10 +286,15 @@ proc genEnums(node: XmlNode, output: var string) =
       for e in enums.items:
         let enumName = e.attr("name")
         var enumValue = e.attr("value")
-        enumValue = enumValue.replace("(~0U)", "(not 0)")
-        enumValue = enumValue.replace("(~0U-1)", "(not 0 - 1)")
-        enumValue = enumValue.replace("(~0U-2)", "(not 0 - 2)")
-        enumValue = enumValue.replace("(~0ULL)", "(not 0)")
+        if enumValue == "":
+          if e.attr("alias") == "":
+            continue
+          enumValue = e.attr("alias")
+        else:
+          enumValue = enumValue.replace("(~0U)", "(not 0'u32)")
+          enumValue = enumValue.replace("(~0U-1)", "(not 0'u32) - 1")
+          enumValue = enumValue.replace("(~0U-2)", "(not 0'u32) - 2")
+          enumValue = enumValue.replace("(~0ULL)", "(not 0'u64)")
 
         if enumName == "VK_LUID_SIZE_KHR":
           enumValue = "VK_LUID_SIZE"
@@ -300,7 +312,7 @@ proc genEnums(node: XmlNode, output: var string) =
 
     var elements: OrderedTableRef[int, string] = newOrderedTable[int, string]()
     for e in enums.items:
-      if e.tag != "enum":
+      if e.kind != xnElement or e.tag != "enum":
         continue
 
       let enumName = e.attr("name")
@@ -309,7 +321,9 @@ proc genEnums(node: XmlNode, output: var string) =
         if e.attr("bitpos") == "":
           continue
         let bitpos = e.attr("bitpos").parseInt()
-        enumValueStr = $nextPowerOfTwo(bitpos)
+        var num = 0
+        num.setBit(bitpos)
+        enumValueStr = $num
       enumValueStr = enumValueStr.translateType()
 
       var enumValue = 0
@@ -357,19 +371,20 @@ proc genProcs(node: XmlNode, output: var string) =
           continue
         vkArg.name = param.child("name").innerText
         vkArg.argType = param.innerText
-        vkArg.argType = vkArg.argType[0 ..< vkArg.argType.len - vkArg.name.len]
-        while vkArg.argType.endsWith(" "):
-          vkArg.argType = vkArg.argType[0 ..< vkArg.argType.len - 1]
+
+        if vkArg.argType.contains('['):
+          let openBracket = vkArg.argType.find('[')
+          let arraySize = vkArg.argType[openBracket + 1 ..< vkArg.argType.find(']')]
+          var typeName = vkArg.argType[0..<openBracket].translateType()
+          typeName = typeName[0 ..< typeName.len - vkArg.name.len]
+          vkArg.argType = "array[{arraySize}, {typeName}]".fmt
+        else:
+          vkArg.argType = vkArg.argType[0 ..< vkArg.argType.len - vkArg.name.len]
+          vkArg.argType = vkArg.argType.translateType()
 
         for part in vkArg.name.split(" "):
           if keywords.contains(part):
             vkArg.name = "`{vkArg.name}`".fmt
-
-        vkArg.argType = vkArg.argType.translateType()
-
-        if param.innerText.contains('['):
-          let arraySize = param.innerText[param.innerText.find('[') + 1 ..< param.innerText.find(']')]
-          vkArg.argType = "array[{arraySize}, {vkArg.argType}]".fmt
 
         vkProc.args.add(vkArg)
 
