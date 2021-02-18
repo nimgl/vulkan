@@ -1216,6 +1216,7 @@ template vkVersionPatch*(version: untyped): untyped =
 
 const vkApiVersion1_0* = vkMakeVersion(1, 0, 0)
 const vkApiVersion1_1* = vkMakeVersion(1, 1, 0)
+const vkApiVersion1_2* = vkMakeVersion(1, 2, 0)
 
 type
   VkSampleMask* = distinct uint32

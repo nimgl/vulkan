@@ -88,6 +88,8 @@ proc genTypes(node: XmlNode, output: var string) =
           output.add("\nconst vkApiVersion1_0* = vkMakeVersion(1, 0, 0)\n")
         elif name == "VK_API_VERSION_1_1":
           output.add("const vkApiVersion1_1* = vkMakeVersion(1, 1, 0)\n")
+        elif name == "VK_API_VERSION_1_2":
+          output.add("const vkApiVersion1_2* = vkMakeVersion(1, 2, 0)\n")
         else:
           echo "category:define not found {name}".fmt
         continue
