@@ -159,6 +159,9 @@ tests/tgeneral
 tests/tglfw
 tests/tmath
 tests/topengl
+tests/test
+tests/triangle
+tools/generator
 imgui.ini
 docs/
 
