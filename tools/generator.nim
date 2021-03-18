@@ -364,7 +364,11 @@ proc genProcs(node: XmlNode, output: var string) =
         vkProc.rVal = vkProc.rVal[0 ..< vkProc.rVal.len - 1]
       vkProc.rVal = vkProc.rVal.translateType()
 
-      if vkProc.name == "vkGetTransformFeedbacki_v":
+      # Skip commands that are preloaded
+      if  vkProc.name == "vkCreateInstance" or
+          vkProc.name == "vkEnumerateInstanceExtensionProperties" or
+          vkProc.name == "vkEnumerateInstanceLayerProperties" or
+          vkProc.name == "vkEnumerateInstanceVersion":
         continue
 
       for param in command.findAll("param"):
