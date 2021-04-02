@@ -584,8 +584,10 @@ var
   semaphores: Semaphores
 
 proc init*(glfwExtensions: cstringArray, glfwExtensionCount: uint32, createSurface: CreateSurfaceProc) =
-  doAssert vkInit()
+  vkPreload();
   instance = createInstance(glfwExtensions, glfwExtensionCount)
+  doAssert vkInit(instance)
+
   surface = createSurface(instance)
   physicalDevice = pickPhysicalDevice(instance, surface)
   device = createLogicalDevice(physicalDevice, surface, graphicsQueue, presentQueue)
