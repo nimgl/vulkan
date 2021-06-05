@@ -15,26 +15,26 @@ when not defined(vkCustomLoader):
   import dynlib
 
   when defined(windows):
-    const vkDLL = "vulkan-1.dll"
+    const vkLib {.strdefine.} = "vulkan-1.dll"
   elif defined(macosx):
-    const vkDLL = "libMoltenVK.dylib"
+    const vkLib {.strdefine.} = "libMoltenVK.dylib"
   else:
-    const vkDLL = "libvulkan.so.1"
+    const vkLib {.strdefine.} = "libvulkan.so.1"
 
-  let vkHandleDLL = loadLib(vkDLL)
-  if isNil(vkHandleDLL):
-    quit("could not load: " & vkDLL)
+  let vkHandleLib = loadLib(vkLib)
+  if isNil(vkHandleLib):
+    quit("could not load: " & vkLib)
 
-  let vkGetProcAddress = cast[proc(inst: pointer, s: cstring): pointer {.stdcall.}](symAddr(vkHandleDLL, "vkGetInstanceProcAddr"))
+  let vkGetProcAddress = cast[proc(inst: pointer, s: cstring): pointer {.stdcall.}](symAddr(vkHandleLib, "vkGetInstanceProcAddr"))
   if vkGetProcAddress == nil:
-    quit("failed to load `vkGetInstanceProcAddr` from " & vkDLL)
+    quit("failed to load `vkGetInstanceProcAddr` from " & vkLib)
 
   vkGetProc = proc(procName: cstring): pointer {.cdecl.} =
     when defined(windows):
       result = vkGetProcAddress(currInst, procName)
       if result != nil:
         return
-    result = symAddr(vkHandleDLL, procName)
+    result = symAddr(vkHandleLib, procName)
     if result == nil:
       raiseInvalidLibrary(procName)
 
@@ -57,7 +57,7 @@ var
   vkEnumerateInstanceVersion*: proc(pApiVersion: ptr uint32 ): VkResult {.stdcall.}
 
 proc vkPreload*(load1_1: bool = true) =
-  vkGetInstanceProcAddr = cast[proc(instance: VkInstance, pName: cstring ): PFN_vkVoidFunction {.stdcall.}](symAddr(vkHandleDLL, "vkGetInstanceProcAddr"))
+  vkGetInstanceProcAddr = cast[proc(instance: VkInstance, pName: cstring ): PFN_vkVoidFunction {.stdcall.}](symAddr(vkHandleLib, "vkGetInstanceProcAddr"))
 
   vkCreateInstance = cast[proc(pCreateInfo: ptr VkInstanceCreateInfo , pAllocator: ptr VkAllocationCallbacks , pInstance: ptr VkInstance ): VkResult {.stdcall.}](vkGetProc("vkCreateInstance"))
   vkEnumerateInstanceExtensionProperties = cast[proc(pLayerName: cstring , pPropertyCount: ptr uint32 , pProperties: ptr VkExtensionProperties ): VkResult {.stdcall.}](vkGetProc("vkEnumerateInstanceExtensionProperties"))
