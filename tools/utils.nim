@@ -43,7 +43,7 @@ proc setVKGetProc*(getProc: proc(procName: cstring): pointer {.cdecl.}) =
 
 type
   VkHandle* = int64
-  VkNonDispatchableHandle* = int64
+  VkNonDispatchableHandle* = uint64
   ANativeWindow = ptr object
   CAMetalLayer = ptr object
   AHardwareBuffer = ptr object
