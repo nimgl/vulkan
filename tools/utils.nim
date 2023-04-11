@@ -17,7 +17,7 @@ when not defined(vkCustomLoader):
   when defined(windows):
     const vkDLL = "vulkan-1.dll"
   elif defined(macosx):
-    if defined(libMoltenVK):
+    when defined(libMoltenVK):
       const vkDLL = "libMoltenVK.dylib"
     else:
       const vkDLL = "libvulkan.1.dylib"
