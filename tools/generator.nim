@@ -90,6 +90,9 @@ proc genTypes(node: XmlNode, output: var string) =
           output.add("const vkApiVersion1_1* = vkMakeVersion(1, 1, 0)\n")
         elif name == "VK_API_VERSION_1_2":
           output.add("const vkApiVersion1_2* = vkMakeVersion(1, 2, 0)\n")
+        elif name == "VK_API_VERSION_1_3":
+          output.add("const vkApiVersion1_3* = vkMakeVersion(1, 3, 0)\n")
+
         else:
           echo "category:define not found {name}".fmt
         continue
@@ -177,7 +180,7 @@ proc genTypes(node: XmlNode, output: var string) =
         elif name == "PFN_vkDebugReportCallbackEXT":
           output.add("  PFN_vkDebugReportCallbackEXT* = proc(flags: VkDebugReportFlagsEXT; objectType: VkDebugReportObjectTypeEXT; cbObject: uint64; location: csize; messageCode:  int32; pLayerPrefix: cstring; pMessage: cstring; pUserData: pointer): VkBool32 {.cdecl.}\n")
         elif name == "PFN_vkDebugUtilsMessengerCallbackEXT":
-          output.add("  PFN_vkDebugUtilsMessengerCallbackEXT* = proc(messageSeverity: VkDebugUtilsMessageSeverityFlagBitsEXT, messageTypes: VkDebugUtilsMessageTypeFlagsEXT, pCallbackData: VkDebugUtilsMessengerCallbackDataEXT, userData: pointer): VkBool32 {.cdecl.}\n"):
+          output.add("  PFN_vkDebugUtilsMessengerCallbackEXT* = proc(messageSeverity: VkDebugUtilsMessageSeverityFlagBitsEXT, messageTypes: VkDebugUtilsMessageTypeFlagsEXT, pCallbackData: VkDebugUtilsMessengerCallbackDataEXT, userData: pointer): VkBool32 {.cdecl.}\n")
         else:
           echo "category:funcpointer not found {name}".fmt
         continue
@@ -476,7 +479,7 @@ proc genConstructors(node: XmlNode, output: var string) =
 proc main() =
   if not os.fileExists("vk.xml"):
     let client = newHttpClient()
-    let glUrl = "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/master/xml/vk.xml"
+    let glUrl = "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/main/xml/vk.xml"
     client.downloadFile(glUrl, "vk.xml")
 
   var output = srcHeader & "\n"

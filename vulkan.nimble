@@ -1,6 +1,6 @@
 # Package
 
-version     = "1.2.1"
+version     = "1.3"
 author      = "Leonardo Mariscal"
 description = "Vulkan bindings for Nim"
 license     = "MIT"
