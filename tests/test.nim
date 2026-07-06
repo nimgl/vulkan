@@ -1,5 +1,5 @@
 import nimgl/glfw
-from nimgl/vulkan import nil
+from vulkan import nil
 from triangle import nil
 
 proc keyCallback(window: GLFWWindow, key: int32, scancode: int32, action: int32, mods: int32) {.cdecl.} =

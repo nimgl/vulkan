@@ -1,0 +1,4 @@
+--path:"../src"
+--define:vulkan
+--path:"../deps/mandelbrot/src"
+--path:"../deps/glfw"

@@ -1,4 +1,4 @@
-import nimgl/vulkan
+import vulkan
 import sets
 import bitops
 
@@ -32,8 +32,6 @@ const
   HEIGHT* = 600
   VK_NULL_HANDLE = 0
 
-loadVK_KHR_surface()
-loadVK_KHR_swapchain()
 
 proc checkValidationLayers() =
   var layerCount: uint32 = 0
@@ -44,7 +42,7 @@ proc checkValidationLayers() =
   for validate in validationLayers:
     var found = false
     for layer in layers:
-      if cstring(layer.layerName.unsafeAddr) == validate:
+      if cast[cstring](layer.layerName.addr) == validate.cstring:
         found = true
         break
     if not found:
@@ -87,28 +85,27 @@ proc createLogicalDevice(physicalDevice: VkPhysicalDevice, surface: VkSurfaceKHR
     let deviceQueueCreateInfo = newVkDeviceQueueCreateInfo(
       sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
       queueFamilyIndex = queueFamily,
-      queueCount = 1,
-      pQueuePriorities = queuePriority.addr
+      queuePriorities = [queuePriority]
     )
     queueCreateInfos.add(deviceQueueCreateInfo)
 
   var
     deviceFeatures = newSeq[VkPhysicalDeviceFeatures](1)
-    deviceExts = allocCStringArray(deviceExtensions)
-    deviceCreateInfo = newVkDeviceCreateInfo(
-      pQueueCreateInfos = queueCreateInfos[0].addr,
-      queueCreateInfoCount = queueCreateInfos.len.uint32,
-      pEnabledFeatures = deviceFeatures[0].addr,
-      enabledExtensionCount = deviceExtensions.len.uint32,
-      enabledLayerCount = 0,
-      ppEnabledLayerNames = nil,
-      ppEnabledExtensionNames = deviceExts
-    )
+    deviceExts = newSeq[cstring](deviceExtensions.len)
+
+  for i, ext in deviceExtensions:
+    deviceExts[i] = ext.cstring
+
+  let deviceCreateInfo = newVkDeviceCreateInfo(
+    queueCreateInfos = queueCreateInfos,
+    enabledFeatures = deviceFeatures,
+    pEnabledLayerNames = [],
+    pEnabledExtensionNames = deviceExts
+  )
 
   if vkCreateDevice(physicalDevice, deviceCreateInfo.addr, nil, result.addr) != VKSuccess:
     echo "failed to create logical device"
 
-  deallocCStringArray(deviceExts)
 
   vkGetDeviceQueue(result, indices.graphicsFamily, 0, graphicsQueue.addr)
   vkGetDeviceQueue(result, indices.presentFamily, 0, presentQueue.addr)
@@ -121,7 +118,7 @@ proc checkDeviceExtensionSupport(pDevice: VkPhysicalDevice): bool =
 
   var requiredExts = deviceExtensions.toHashSet
   for ext in availableExts.mitems:
-    requiredExts.excl($ ext.extensionName.addr)
+    requiredExts.excl($cast[cstring](ext.extensionName.addr))
   requiredExts.len == 0
 
 proc querySwapChainSupport(pDevice: VkPhysicalDevice, surface: VkSurfaceKHR): SwapChainSupportDetails =
@@ -159,18 +156,20 @@ proc isDeviceSuitable(pDevice: VkPhysicalDevice, surface: VkSurfaceKHR): bool =
 proc createInstance(glfwExtensions: cstringArray, glfwExtensionCount: uint32): VkInstance =
   var appInfo = newVkApplicationInfo(
     pApplicationName = "NimGL Vulkan Example",
-    applicationVersion = vkMakeVersion(1, 0, 0),
+    applicationVersion = vkMakeVersion(0, 1, 0, 0),
     pEngineName = "No Engine",
-    engineVersion = vkMakeVersion(1, 0, 0),
+    engineVersion = vkMakeVersion(0, 1, 0, 0),
     apiVersion = vkApiVersion1_1
   )
 
+  var extensionNames = newSeq[cstring](glfwExtensionCount.int)
+  for i in 0..<glfwExtensionCount.int:
+    extensionNames[i] = glfwExtensions[i]
+
   var instanceCreateInfo = newVkInstanceCreateInfo(
     pApplicationInfo = appInfo.addr,
-    enabledExtensionCount = glfwExtensionCount,
-    ppEnabledExtensionNames = glfwExtensions,
-    enabledLayerCount = 0,
-    ppEnabledLayerNames = nil,
+    pEnabledLayerNames = [],
+    pEnabledExtensionNames = extensionNames,
   )
 
   if vkCreateInstance(instanceCreateInfo.addr, nil, result.addr) != VKSuccess:
@@ -586,7 +585,9 @@ var
 proc init*(glfwExtensions: cstringArray, glfwExtensionCount: uint32, createSurface: CreateSurfaceProc) =
   vkPreload();
   instance = createInstance(glfwExtensions, glfwExtensionCount)
-  doAssert vkInit(instance)
+  vkInit(instance)
+  loadVK_KHR_surface()
+  loadVK_KHR_swapchain()
 
   surface = createSurface(instance)
   physicalDevice = pickPhysicalDevice(instance, surface)
